@@ -21,6 +21,9 @@ const uploadOnCloudinary = async (localFilePath) => {
     } catch (err) {
       console.error("Error deleting temp file:", err.message);
     }
+
+    console.log("Response from cloudinary: ", response);
+
     return response;
   } catch (error) {
     try {
@@ -32,4 +35,4 @@ const uploadOnCloudinary = async (localFilePath) => {
   }
 };
 
-export { uploadOnCloudinary };
+export { uploadOnCloudinary, cloudinary };
