@@ -4,9 +4,8 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary, cloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
-import fs from "fs";
-import path from "path";
 import mongoose from "mongoose";
+import { deleteTempFile } from "../utils/deleteTempFile.js";
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
@@ -26,16 +25,6 @@ const generateAccessAndRefreshTokens = async (userId) => {
   }
 };
 
-const deleteTempFile = (filePath) => {
-  try {
-    if (filePath && fs.existsSync(filePath)) {
-      fs.unlinkSync(path.resolve(filePath));
-    }
-  } catch (error) {
-    console.log("Error deleting temp file", error.message);
-  }
-};
-
 const registerUser = asyncHandler(async (req, res) => {
   const { fullName, email, username, password } = req.body;
 
@@ -50,11 +39,15 @@ const registerUser = asyncHandler(async (req, res) => {
     coverImageLocalPath = req.files.coverImage[0].path;
   }
 
+  const cleanUp = () => {
+    deleteTempFile(avatarLocalPath);
+    deleteTempFile(coverImageLocalPath);
+  } 
+
   if (
     [fullName, email, username, password].some((field) => field?.trim() === "")
   ) {
-    deleteTempFile(avatarLocalPath);
-    deleteTempFile(coverImageLocalPath);
+    cleanUp();
     throw new ApiError(400, "All fields are required");
   }
 
@@ -63,21 +56,30 @@ const registerUser = asyncHandler(async (req, res) => {
   });
 
   if (existedUser) {
-    deleteTempFile(avatarLocalPath);
-    deleteTempFile(coverImageLocalPath);
+    cleanUp();
     throw new ApiError(409, "User with email or username already exists");
   }
 
   if (!avatarLocalPath) {
-    deleteTempFile(avatarLocalPath);
+    cleanUp();
     throw new ApiError(400, "Avatar file required");
   }
 
-  const avatar = await uploadOnCloudinary(avatarLocalPath);
-  const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+  let avatar, coverImage;
+  try {
+    const [uploadAvatar, uploadCoverImage] = await Promise.all([
+      uploadOnCloudinary(avatarLocalPath),
+      uploadOnCloudinary(coverImageLocalPath)
+    ])
 
-  if (!avatar) {
-    throw new ApiError(400, "Avatar file required");
+    avatar = uploadAvatar;
+    coverImage = uploadCoverImage;
+
+    if(!avatar) {
+      throw new ApiError(400, "Avatar file required");
+    }
+  } finally {
+    cleanUp();
   }
 
   const user = await User.create({
@@ -282,19 +284,14 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 const updateUserAvatar = asyncHandler(async (req, res) => {
   const avatarLocalPath = req.file?.path;
 
-  console.log("Update user avatar: ", req.file);
-
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avatar file is missing");
   }
 
-  console.log(req.user);
-
   const existingUser = await User.findById(req.user?._id);
 
-  console.log(existingUser);
-
   if (!existingUser) {
+    deleteTempFile(avatarLocalPath);
     throw new ApiError(400, "User not found");
   }
 
@@ -303,6 +300,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   const newAvatar = await uploadOnCloudinary(avatarLocalPath);
 
   if (!(newAvatar?.url && newAvatar?.public_id)) {
+    deleteTempFile(avatarLocalPath);
     throw new ApiError(400, "Error while uploading on avatar");
   }
 
@@ -338,6 +336,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
   const existingUser = await User.findById(req.user?._id);
 
   if (!existingUser) {
+    deleteTempFile(coverImageLocalPath);
     throw new ApiError(400, "User not found");
   }
 
@@ -346,6 +345,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
   const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
   if (!(coverImage.url && coverImage.public_id)) {
+    deleteTempFile(coverImageLocalPath);
     throw new ApiError(400, "Error while uploading on cover image");
   }
 
@@ -446,8 +446,8 @@ const getWatchHistory = asyncHandler(async (req, res) => {
   const user = await User.aggregate([
     {
       $match: {
-        _id: new mongoose.Types.ObjectId(req.user._id)
-      }
+        _id: new mongoose.Types.ObjectId(req.user._id),
+      },
     },
     {
       $lookup: {
@@ -467,34 +467,34 @@ const getWatchHistory = asyncHandler(async (req, res) => {
                   $project: {
                     fullName: 1,
                     username: 1,
-                    avatar: 1
-                  }
-                }
-              ]
-            }
+                    avatar: 1,
+                  },
+                },
+              ],
+            },
           },
           {
             $addFields: {
               owner: {
-                $first: "$owner"
-              }
-            }
-          }
-        ]
-      }
-    }
-  ])
+                $first: "$owner",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
 
   return res
-  .status(200)
-  .json(
-    new ApiResponse(
-      200,
-      user[0].getWatchHistory,
-      "Watch history fetched successfully"
-    )
-  )
-})
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        user[0].getWatchHistory,
+        "Watch history fetched successfully"
+      )
+    );
+});
 
 export {
   registerUser,
@@ -507,5 +507,5 @@ export {
   updateUserAvatar,
   updateUserCoverImage,
   getUserChannelProfile,
-  getWatchHistory
+  getWatchHistory,
 };

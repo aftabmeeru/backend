@@ -22,8 +22,6 @@ const uploadOnCloudinary = async (localFilePath) => {
       console.error("Error deleting temp file:", err.message);
     }
 
-    console.log("Response from cloudinary: ", response);
-
     return response;
   } catch (error) {
     try {
@@ -35,4 +33,17 @@ const uploadOnCloudinary = async (localFilePath) => {
   }
 };
 
-export { uploadOnCloudinary, cloudinary };
+const deleteFromCloudinary = async (publicId, resourceType = "image") => {
+  try {
+    if(!publicId) return null;
+
+    return await cloudinary.uploader.destroy(publicId, {
+      resource_type: resourceType
+    })
+  } catch (error) {
+    console.error("Cloudinary delete error: ", error.message);
+    return null;    
+  }
+}
+
+export { uploadOnCloudinary, deleteFromCloudinary, cloudinary };
