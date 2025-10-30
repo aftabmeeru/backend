@@ -20,7 +20,7 @@ const getAllVideos = asyncHandler(async (req, res) => {
       query,
       sortBy = "createdAt",
       sortType = "desc",
-      videoId,
+      userId,
     } = req.query;
 
     const filter = {};
@@ -32,22 +32,24 @@ const getAllVideos = asyncHandler(async (req, res) => {
       ];
     }
 
-    if (videoId) {
-      filter._id = videoId;
+    if (userId) {
+      if(!isValidObjectId(userId)) {
+        throw new ApiError(400, "Invalid User Id");
+      }
+      filter.owner = userId;
     }
 
     const sort = { [sortBy]: sortType === "desc" ? -1 : 1 };
-
     const maxLimit = 100;
     const safeLimit = Math.min(Number(limit), maxLimit);
-
     const skip = (Number(page) - 1) * safeLimit;
 
     const videos = await Video.find(filter)
       .collation({ locale: "en", strength: 2 })
       .sort(sort)
       .skip(skip)
-      .limit(Number(safeLimit));
+      .limit(Number(safeLimit))
+      .populate("owner", "username avatar");
 
     if (!videos || videos.length === 0) {
       throw new ApiError(404, "No videos found");
