@@ -42,7 +42,7 @@ const registerUser = asyncHandler(async (req, res) => {
   const cleanUp = () => {
     deleteTempFile(avatarLocalPath);
     deleteTempFile(coverImageLocalPath);
-  } 
+  };
 
   if (
     [fullName, email, username, password].some((field) => field?.trim() === "")
@@ -69,13 +69,13 @@ const registerUser = asyncHandler(async (req, res) => {
   try {
     const [uploadAvatar, uploadCoverImage] = await Promise.all([
       uploadOnCloudinary(avatarLocalPath),
-      uploadOnCloudinary(coverImageLocalPath)
-    ])
+      uploadOnCloudinary(coverImageLocalPath),
+    ]);
 
     avatar = uploadAvatar;
     coverImage = uploadCoverImage;
 
-    if(!avatar) {
+    if (!avatar) {
       throw new ApiError(400, "Avatar file required");
     }
   } finally {
@@ -443,10 +443,12 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
 });
 
 const getWatchHistory = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
   const user = await User.aggregate([
     {
       $match: {
-        _id: new mongoose.Types.ObjectId(req.user._id),
+        _id: new mongoose.Types.ObjectId(userId),
       },
     },
     {
@@ -484,6 +486,12 @@ const getWatchHistory = asyncHandler(async (req, res) => {
       },
     },
   ]);
+
+  if (!user.length || !user[0].watchHistory.length) {
+    return res
+      .status(200)
+      .json(new ApiResponse(200, [], "No watch history found"));
+  }
 
   return res
     .status(200)

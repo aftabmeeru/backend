@@ -33,7 +33,7 @@ const getAllVideos = asyncHandler(async (req, res) => {
     }
 
     if (userId) {
-      if(!isValidObjectId(userId)) {
+      if (!isValidObjectId(userId)) {
         throw new ApiError(400, "Invalid User Id");
       }
       filter.owner = userId;
@@ -311,6 +311,49 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, video, "Toggle status updated successfully"));
 });
 
+const watchVideo = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+
+  if (!isValidObjectId(videoId)) {
+    throw new ApiError(400, "Invalid video ID");
+  }
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized: please log in first");
+  }
+
+  const video = await Video.findByIdAndUpdate(
+    videoId,
+    {
+      $inc: { views: 1 },
+    },
+    { new: true }
+  ).populate("owner", "username avatar");
+
+  if (!video) {
+    throw new ApiError(404, "Video not found");
+  }
+
+  await User.findByIdAndUpdate(userId, {
+    $addToSet: { watchHistory: video._id },
+  });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        videoId: video._id,
+        title: video.title,
+        views: video.views,
+        owner: video.owner,
+      },
+      "Video watched successfully"
+    )
+  );
+});
+
 export {
   getAllVideos,
   publishVideo,
@@ -318,4 +361,5 @@ export {
   updateVideo,
   deleteVideo,
   togglePublishStatus,
+  watchVideo,
 };

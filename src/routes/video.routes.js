@@ -8,6 +8,7 @@ import {
   publishVideo,
   togglePublishStatus,
   updateVideo,
+  watchVideo,
 } from "../controllers/video.controller.js";
 
 const router = Router();
@@ -38,5 +39,6 @@ router
   .patch(upload.single("thumbnail"), updateVideo);
 
 router.route("toggle/publish/:videoId").patch(togglePublishStatus);
+router.route("/:videoId/watch").post(watchVideo);
 
 export default router;
